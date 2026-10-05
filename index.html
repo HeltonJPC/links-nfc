@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gerador de Link NFC</title>
+<style>
+:root {
+  --bg: #f2f4f6;
+  --surface: #ffffff;
+  --ink: #131d27;
+  --muted: #5b6875;
+  --line: #d9dee3;
+  --star: #f4b400;
+  --star-ink: #2a1e00;
+  --ok: #1e7a45;
+  --bad: #b3261e;
+  --field: #f8f9fa;
+  --font: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e151c; --surface: #17212b; --ink: #e9eef3; --muted: #93a1af; --line: #2a3745;
+    --star: #f7c23a; --ok: #55c58a; --bad: #ff8a80; --field: #101a23;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.5;
+  padding-inline: 16px;
+  padding-block: 28px 56px;
+}
+.wrap { max-width: 680px; margin-inline: auto; display: flex; flex-direction: column; gap: 20px; }
+#app { display: flex; flex-direction: column; gap: 20px; }
+h1, h2 { margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+h1 { font-size: 28px; line-height: 1.15; }
+h2 { font-size: 18px; }
+p { margin: 0; }
+.sub { color: var(--muted); margin-top: 6px; }
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-size: 14px; min-width: 0; }
+.hint { font-weight: 400; color: var(--muted); }
+input[type="text"], input[type="search"], input[type="password"], select, textarea {
+  width: 100%;
+  font: inherit;
+  color: var(--ink);
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 11px 12px;
+  min-width: 0;
+}
+textarea { resize: vertical; min-height: 64px; }
+input.mono { font-family: var(--mono); font-size: 14px; }
+input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible {
+  outline: 2px solid var(--star);
+  outline-offset: 2px;
+}
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 520px) { .grid2 { grid-template-columns: 1fr; } }
+.check { font-size: 14px; min-height: 21px; color: var(--muted); }
+.check.ok { color: var(--ok); }
+.check.warn { color: var(--bad); }
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.row input { flex: 1 1 240px; }
+button, .btn {
+  font: inherit;
+  font-weight: 700;
+  font-size: 15px;
+  border-radius: 6px;
+  padding: 11px 18px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+button:hover:not(:disabled), .btn:hover { border-color: var(--muted); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+.primary { background: var(--star); border-color: var(--star); color: var(--star-ink); }
+.primary:hover:not(:disabled) { border-color: var(--star); filter: brightness(0.95); }
+.small { padding: 6px 10px; font-size: 13px; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+ol { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; }
+ol a { color: var(--ink); font-weight: 600; }
+.note { font-size: 14px; color: var(--muted); }
+.mono-inline { font-family: var(--mono); font-size: 13px; }
+.bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.listhead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.count { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+ul { list-style: none; margin: 0; padding: 0; }
+li.item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 16px;
+  align-items: center;
+  padding-block: 14px;
+  border-top: 1px solid var(--line);
+}
+li.item:first-child { border-top: 0; }
+@media (max-width: 520px) { li.item { grid-template-columns: minmax(0, 1fr); } }
+.name { font-weight: 700; overflow-wrap: anywhere; }
+.meta { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.pid { font-family: var(--mono); font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.badge {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 9px;
+  margin-left: 8px;
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+.badge.s-vendido { color: var(--ok); border-color: var(--ok); }
+.badge.s-interessado { border-color: var(--star); }
+.badge.s-sem { color: var(--muted); }
+.banner {
+  border: 1px solid var(--star);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 14px;
+  background: var(--surface);
+}
+.msg { font-size: 14px; min-height: 21px; }
+.msg.warn { color: var(--bad); }
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  background: var(--ink);
+  color: var(--bg);
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 14px;
+  max-width: calc(100% - 32px);
+  z-index: 10;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Gerador de Link NFC</h1>
+    <p class="sub">Gere o link de avaliação do Google para o cartão NFC e veja os locais que a equipe já visitou.</p>
+  </header>
+
+  <div class="banner" id="banner-local" hidden>
+    A lista compartilhada ainda não foi ligada a esta página. O gerador de link funciona normalmente, mas nada é cadastrado para a equipe.
+  </div>
+
+  <section class="panel" id="sec-acesso" aria-labelledby="t-acesso" hidden>
+    <h2 id="t-acesso">Entrar</h2>
+    <div class="grid2">
+      <label for="a-nome">
+        <span>Seu nome</span>
+        <input id="a-nome" type="text" autocomplete="name" placeholder="Ex.: Carlos">
+      </label>
+      <label for="a-codigo">
+        <span>Código da equipe</span>
+        <input id="a-codigo" type="password" autocomplete="off" placeholder="Informado pelo Helton">
+      </label>
+    </div>
+    <div class="msg" id="a-msg" role="status" aria-live="polite"></div>
+    <div class="actions"><button id="b-entrar" class="primary" type="button">Entrar</button></div>
+  </section>
+
+  <div id="app" hidden>
+    <div class="bar" id="bar-usuario" hidden>
+      <span>Revendedor: <strong id="who"></strong></span>
+      <button id="b-sair" class="small" type="button">Trocar usuário</button>
+    </div>
+
+    <section class="panel" id="sec-lista" aria-labelledby="t-lista" hidden>
+      <div class="listhead">
+        <h2 id="t-lista">1. Confira se o local já foi cadastrado</h2>
+        <span class="count" id="count"></span>
+      </div>
+      <label for="f-busca">
+        <span>Buscar por nome, endereço, revendedor ou Place ID</span>
+        <input id="f-busca" type="search" autocomplete="off" placeholder="Ex.: padaria">
+      </label>
+      <ul id="lista"></ul>
+      <div class="note" id="vazio"></div>
+      <div class="actions"><button id="b-atualizar" class="small" type="button">Atualizar lista</button></div>
+    </section>
+
+    <section class="panel" aria-labelledby="t-achar">
+      <h2 id="t-achar">2. Descubra o Place ID do local</h2>
+      <ol>
+        <li>Abra a <a href="https://developers.google.com/maps/documentation/places/web-service/place-id" target="_blank" rel="noopener">ferramenta de Place ID do Google</a>.</li>
+        <li>No mapa da página, digite o nome do local no campo <span class="mono-inline">Enter a location</span> e escolha o resultado certo (confira o endereço).</li>
+        <li>Aparece uma janelinha com o <strong>Place ID</strong>, um código que começa com <span class="mono-inline">ChIJ</span>. Copie esse código.</li>
+      </ol>
+    </section>
+
+    <section class="panel" id="sec-gerar" aria-labelledby="t-gerar">
+      <h2 id="t-gerar">3. Gere o link e cadastre</h2>
+      <label for="f-id">
+        <span>Place ID <span class="hint">(também aceita um link que já tenha placeid=)</span></span>
+        <input id="f-id" class="mono" type="text" autocomplete="off" spellcheck="false" placeholder="ChIJ...">
+      </label>
+      <div class="grid2">
+        <label for="f-nome">
+          <span>Nome do local</span>
+          <input id="f-nome" type="text" autocomplete="off" placeholder="Ex.: Padaria Central">
+        </label>
+        <label for="f-end">
+          <span>Endereço ou cidade <span class="hint">(opcional)</span></span>
+          <input id="f-end" type="text" autocomplete="off" placeholder="Ex.: Centro, Ouro Preto - MG">
+        </label>
+      </div>
+      <div class="check" id="check" aria-live="polite"></div>
+
+      <label for="f-link"><span>Link para gravar no NFC</span></label>
+      <div class="row">
+        <input id="f-link" type="text" class="mono" readonly value="" placeholder="O link aparece aqui">
+        <button id="b-copy" class="primary" type="button" disabled>Copiar link</button>
+      </div>
+      <div class="actions">
+        <a id="b-open" class="btn" href="#" target="_blank" rel="noopener" hidden>Testar link</a>
+      </div>
+      <p class="note">Antes de gravar no cartão, use Testar link e confirme que abre a tela de avaliação do local certo.</p>
+
+      <div id="bloco-cadastro">
+        <div class="grid2">
+          <label for="f-status">
+            <span>Situação</span>
+            <select id="f-status">
+              <option>Visitado</option>
+              <option>Interessado</option>
+              <option>Vendido</option>
+              <option>Sem interesse</option>
+            </select>
+          </label>
+          <label for="f-obs">
+            <span>Observação <span class="hint">(opcional)</span></span>
+            <textarea id="f-obs" placeholder="Ex.: voltar na quinta, falar com a dona Maria"></textarea>
+          </label>
+        </div>
+        <div class="actions" style="margin-top:14px">
+          <button id="b-save" class="primary" type="button" disabled>Cadastrar na lista da equipe</button>
+          <button id="b-clear" type="button">Limpar</button>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+(function () {
+  // Cole aqui a URL do Apps Script (termina em /exec). Veja COMO-PUBLICAR.md.
+  var CONFIG = { URL: "https://script.google.com/macros/s/AKfycbzPFB3j4chi_5GZ2Lubrlh6NlW0B7BQb2EfTXl5NmlL962iUlaNy6eyL39acw_RXSQi/exec" };
+
+  var BASE = "https://search.google.com/local/writereview?placeid=";
+  var LS_NOME = "nfc-revendedor";
+  var LS_COD = "nfc-codigo";
+  var MAX_LISTA = 30;
+  var configurado = /^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/.test(CONFIG.URL);
+
+  var $ = function (id) { return document.getElementById(id); };
+  var el = function (tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+  };
+
+  var secAcesso = $("sec-acesso"), app = $("app"), secLista = $("sec-lista"), barUsuario = $("bar-usuario");
+  var aNome = $("a-nome"), aCodigo = $("a-codigo"), aMsg = $("a-msg"), bEntrar = $("b-entrar"), bSair = $("b-sair");
+  var fId = $("f-id"), fNome = $("f-nome"), fEnd = $("f-end"), fLink = $("f-link"), fStatus = $("f-status"), fObs = $("f-obs"), fBusca = $("f-busca");
+  var bCopy = $("b-copy"), bSave = $("b-save"), bOpen = $("b-open"), bClear = $("b-clear"), bAtualizar = $("b-atualizar");
+  var check = $("check"), lista = $("lista"), vazio = $("vazio"), count = $("count"), toastEl = $("toast"), who = $("who");
+
+  var nomeUsuario = "", codigo = "";
+  var itens = [];
+  var logado = false;
+  var carregou = false;
+  var toastTimer = null;
+
+  function lsGet(k) { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
+
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.hidden = true; }, 2400);
+  }
+  function parseId(raw) {
+    var s = (raw || "").trim();
+    var m = s.match(/placeid=([^&\s#]+)/i);
+    return m ? m[1] : s;
+  }
+  function validId(s) { return /^[A-Za-z0-9_-]{10,}$/.test(s); }
+  function linkFor(id) { return BASE + id; }
+  function fmtData(iso) {
+    var t = Date.parse(iso);
+    if (isNaN(t)) return "";
+    return new Date(t).toLocaleDateString("pt-BR");
+  }
+  function achar(id) {
+    for (var i = 0; i < itens.length; i++) if (itens[i].placeId === id) return itens[i];
+    return null;
+  }
+
+  function copyText(text, input) {
+    function fallback() {
+      try { input.focus(); input.select(); input.setSelectionRange(0, text.length); } catch (e) {}
+      toast("Link selecionado. Use Ctrl+C para copiar.");
+    }
+    try {
+      navigator.clipboard.writeText(text).then(function () { toast("Link copiado"); }, fallback);
+    } catch (e) { fallback(); }
+  }
+
+  /* ---------- API (planilha) ---------- */
+  function apiLista() {
+    return fetch(CONFIG.URL + "?codigo=" + encodeURIComponent(codigo), { redirect: "follow" })
+      .then(function (r) { return r.json(); });
+  }
+  function apiSalvar(item) {
+    return fetch(CONFIG.URL, {
+      method: "POST",
+      redirect: "follow",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ codigo: codigo, item: item })
+    }).then(function (r) { return r.json(); });
+  }
+
+  function carregarLista(silencioso) {
+    if (!configurado || !logado) return Promise.resolve();
+    if (!silencioso) { vazio.textContent = "Carregando a lista..."; }
+    return apiLista().then(function (res) {
+      if (res && res.ok) {
+        itens = (res.itens || []).sort(function (a, b) { return Date.parse(b.atualizadoEm || 0) - Date.parse(a.atualizadoEm || 0); });
+        carregou = true;
+        renderLista();
+        refreshForm();
+      } else if (res && res.erro === "codigo") {
+        sair("O código da equipe mudou. Entre de novo com o código novo.");
+      } else if (!silencioso) {
+        vazio.textContent = "Não foi possível carregar a lista. Tente atualizar.";
+      }
+    }, function () {
+      if (!silencioso) { vazio.textContent = "Sem conexão com a lista da equipe. Verifique a internet e toque em Atualizar lista."; }
+    });
+  }
+
+  /* ---------- Acesso ---------- */
+  function mostrarApp() {
+    logado = true;
+    secAcesso.hidden = true;
+    app.hidden = false;
+    barUsuario.hidden = false;
+    secLista.hidden = false;
+    who.textContent = nomeUsuario;
+    refreshForm();
+  }
+  function sair(mensagem) {
+    logado = false;
+    carregou = false;
+    itens = [];
+    lsDel(LS_COD);
+    app.hidden = true;
+    secAcesso.hidden = false;
+    aNome.value = nomeUsuario || lsGet(LS_NOME);
+    aCodigo.value = "";
+    aMsg.textContent = mensagem || "";
+    aMsg.className = mensagem ? "msg warn" : "msg";
+  }
+  function entrar() {
+    var n = aNome.value.trim();
+    var c = aCodigo.value.trim();
+    if (!n || !c) {
+      aMsg.textContent = "Informe seu nome e o código da equipe.";
+      aMsg.className = "msg warn";
+      return;
+    }
+    nomeUsuario = n;
+    codigo = c;
+    aMsg.textContent = "Entrando...";
+    aMsg.className = "msg";
+    bEntrar.disabled = true;
+    apiLista().then(function (res) {
+      bEntrar.disabled = false;
+      if (res && res.ok) {
+        lsSet(LS_NOME, n);
+        lsSet(LS_COD, c);
+        itens = (res.itens || []).sort(function (a, b) { return Date.parse(b.atualizadoEm || 0) - Date.parse(a.atualizadoEm || 0); });
+        carregou = true;
+        mostrarApp();
+        renderLista();
+      } else {
+        aMsg.textContent = "Código incorreto. Confira com o Helton.";
+        aMsg.className = "msg warn";
+      }
+    }, function () {
+      bEntrar.disabled = false;
+      aMsg.textContent = "Não foi possível conectar. Verifique a internet e tente de novo.";
+      aMsg.className = "msg warn";
+    });
+  }
+  bEntrar.addEventListener("click", entrar);
+  aCodigo.addEventListener("keydown", function (e) { if (e.key === "Enter") entrar(); });
+  bSair.addEventListener("click", function () { sair(""); });
+
+  /* ---------- Lista ---------- */
+  function renderLista() {
+    var q = fBusca.value.trim().toLowerCase();
+    var filtrados = itens.filter(function (x) {
+      if (!q) return true;
+      return (x.nome + " " + x.endereco + " " + x.revendedor + " " + x.placeId + " " + x.status).toLowerCase().indexOf(q) !== -1;
+    });
+    lista.textContent = "";
+    filtrados.slice(0, MAX_LISTA).forEach(function (x) {
+      var li = el("li", "item");
+      var info = el("div");
+      var nm = el("div", "name", x.nome || "Sem nome");
+      if (x.status) {
+        var cls = "badge";
+        if (x.status === "Vendido") cls += " s-vendido";
+        else if (x.status === "Interessado") cls += " s-interessado";
+        else if (x.status === "Sem interesse") cls += " s-sem";
+        nm.appendChild(el("span", cls, x.status));
+      }
+      info.appendChild(nm);
+      if (x.endereco) info.appendChild(el("div", "meta", x.endereco));
+      var quando = fmtData(x.atualizadoEm);
+      info.appendChild(el("div", "meta", "Por " + (x.revendedor || "?") + (quando ? " em " + quando : "")));
+      if (x.obs) info.appendChild(el("div", "meta", "Obs.: " + x.obs));
+      info.appendChild(el("div", "pid", x.placeId));
+      li.appendChild(info);
+
+      var act = el("div", "actions");
+      var c = el("button", "small primary", "Copiar link");
+      c.type = "button";
+      c.addEventListener("click", function () {
+        var tmp = document.createElement("input");
+        tmp.value = linkFor(x.placeId);
+        tmp.style.position = "fixed"; tmp.style.opacity = "0";
+        document.body.appendChild(tmp);
+        copyText(linkFor(x.placeId), tmp);
+        setTimeout(function () { tmp.remove(); }, 4000);
+      });
+      var o = el("a", "btn small", "Testar");
+      o.href = linkFor(x.placeId); o.target = "_blank"; o.rel = "noopener";
+      var ed = el("button", "small", "Editar");
+      ed.type = "button";
+      ed.addEventListener("click", function () {
+        fId.value = x.placeId;
+        fNome.value = x.nome;
+        fEnd.value = x.endereco;
+        fStatus.value = x.status || "Visitado";
+        fObs.value = x.obs || "";
+        refreshForm();
+        $("sec-gerar").scrollIntoView();
+      });
+      act.appendChild(c); act.appendChild(o); act.appendChild(ed);
+      li.appendChild(act);
+      lista.appendChild(li);
+    });
+
+    if (!carregou) { count.textContent = ""; return; }
+    count.textContent = itens.length + (itens.length === 1 ? " local" : " locais");
+    if (!itens.length) {
+      vazio.textContent = "Nenhum local cadastrado ainda. Seja o primeiro: siga os passos 2 e 3.";
+    } else if (!filtrados.length) {
+      vazio.textContent = q ? "Nenhum local encontrado para essa busca. Pode seguir para o passo 2." : "";
+    } else if (filtrados.length > MAX_LISTA) {
+      vazio.textContent = "Mostrando " + MAX_LISTA + " de " + filtrados.length + ". Use a busca para refinar.";
+    } else {
+      vazio.textContent = "";
+    }
+  }
+  fBusca.addEventListener("input", renderLista);
+  bAtualizar.addEventListener("click", function () { carregarLista(false); });
+
+  /* ---------- Formulário ---------- */
+  function refreshForm() {
+    var id = parseId(fId.value);
+    var ok = validId(id);
+    fLink.value = id ? linkFor(id) : "";
+    bCopy.disabled = !id;
+    bOpen.hidden = !id;
+    if (id) bOpen.href = linkFor(id);
+    bSave.disabled = !(ok && fNome.value.trim() && configurado && logado);
+    if (!id) {
+      check.textContent = ""; check.className = "check";
+    } else if (!ok) {
+      check.textContent = "Esse Place ID parece incompleto. Confira antes de gravar no cartão.";
+      check.className = "check warn";
+    } else {
+      var dup = achar(id);
+      if (dup) {
+        var q = fmtData(dup.atualizadoEm);
+        check.textContent = "Este local já está na lista: " + (dup.nome || "sem nome") + ", por " + (dup.revendedor || "?") + (q ? " em " + q : "") + ". Se cadastrar de novo, o registro é atualizado.";
+        check.className = "check warn";
+      } else {
+        check.textContent = "Place ID com formato válido.";
+        check.className = "check ok";
+      }
+    }
+  }
+  [fId, fNome, fEnd, fObs].forEach(function (n) { n.addEventListener("input", refreshForm); });
+  fId.addEventListener("blur", function () {
+    var id = parseId(fId.value);
+    if (id && id !== fId.value.trim()) { fId.value = id; }
+  });
+  bCopy.addEventListener("click", function () {
+    var id = parseId(fId.value);
+    if (id) copyText(linkFor(id), fLink);
+  });
+  bClear.addEventListener("click", function () {
+    fId.value = ""; fNome.value = ""; fEnd.value = ""; fObs.value = ""; fStatus.value = "Visitado";
+    refreshForm();
+    fId.focus();
+  });
+  bSave.addEventListener("click", function () {
+    var id = parseId(fId.value);
+    if (!validId(id) || !fNome.value.trim() || !logado) return;
+    bSave.disabled = true;
+    apiSalvar({
+      placeId: id,
+      nome: fNome.value.trim(),
+      endereco: fEnd.value.trim(),
+      revendedor: nomeUsuario,
+      status: fStatus.value,
+      obs: fObs.value.trim()
+    }).then(function (res) {
+      if (res && res.ok) {
+        toast("Cadastrado na lista da equipe");
+        fId.value = ""; fNome.value = ""; fEnd.value = ""; fObs.value = ""; fStatus.value = "Visitado";
+        return carregarLista(true).then(refreshForm);
+      }
+      if (res && res.erro === "codigo") { sair("O código da equipe mudou. Entre de novo com o código novo."); return; }
+      toast("Não foi possível cadastrar. Confira o Place ID e tente de novo.");
+      refreshForm();
+    }, function () {
+      toast("Sem conexão. O local não foi cadastrado, tente de novo.");
+      refreshForm();
+    });
+  });
+
+  /* ---------- Início ---------- */
+  setInterval(function () { if (!document.hidden) carregarLista(true); }, 60000);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) carregarLista(true); });
+
+  function iniciar() {
+    refreshForm();
+    if (!configurado) {
+      $("banner-local").hidden = false;
+      app.hidden = false;
+      $("bloco-cadastro").hidden = true;
+      return;
+    }
+    nomeUsuario = lsGet(LS_NOME);
+    codigo = lsGet(LS_COD);
+    if (nomeUsuario && codigo) {
+      aNome.value = nomeUsuario;
+      apiLista().then(function (res) {
+        if (res && res.ok) {
+          itens = (res.itens || []).sort(function (a, b) { return Date.parse(b.atualizadoEm || 0) - Date.parse(a.atualizadoEm || 0); });
+          carregou = true;
+          mostrarApp();
+          renderLista();
+        } else {
+          sair(res && res.erro === "codigo" ? "O código da equipe mudou. Entre de novo com o código novo." : "");
+        }
+      }, function () {
+        sair("Não foi possível conectar. Verifique a internet e entre de novo.");
+      });
+    } else {
+      aNome.value = nomeUsuario;
+      secAcesso.hidden = false;
+    }
+  }
+  iniciar();
+})();
+</script>
+</body>
+</html>
